@@ -3,6 +3,7 @@ layout: default
 title:  Home
 ---
 
+The objective of this project is to implement the Dropper game in Minecraft using ML models, Neural Neworks and Reinforcement Learning to set a reward system.
 Source code: https://github.com/USER/PROJECT (_fix this_)
 
 Reports:
