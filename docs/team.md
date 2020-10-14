@@ -7,10 +7,10 @@ title:  Team
 
 
 ## USER 1
-***UCI Net ID***: skrishn3
+***Shreya Krishnam***: skrishn3
 
 ## USER 2
-***UCI Net ID***: antholn1
+***Anthony Luis Navarrette***: antholn1
 
 ## USER 3
-***UCI Net ID***: kendrixc
+***Kendrick Xiyuan Chen***: kendrixc
