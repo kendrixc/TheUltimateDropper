@@ -6,11 +6,11 @@ title:  Team
 # {{ page.title }}
 
 
-## USER 1
-***Shreya Krishnam***: skrishn3
+## Shreya Krishnam
+***UCI Net ID***: skrishn3
 
-## USER 2
-***Anthony Luis Navarrette***: antholn1
+## Anthony Luis Navarrette
+***UCI Net ID***: antholn1
 
-## USER 3
-***Kendrick Xiyuan Chen***: kendrixc
+## Kendrick Xiyuan Chen
+***UCI Net ID***: kendrixc
