@@ -24,8 +24,8 @@ SIZE = 50
 REWARD_DENSITY = .1
 PENALTY_DENSITY = .02
 OBS_SIZE = 5
-MAX_EPISODE_STEPS = 100
-MAX_GLOBAL_STEPS = 10000
+MAX_EPISODE_STEPS = 1000
+MAX_GLOBAL_STEPS = 100000
 REPLAY_BUFFER_SIZE = 10000
 EPSILON_DECAY = .999
 MIN_EPSILON = .1
@@ -36,11 +36,13 @@ LEARNING_RATE = 1e-4
 START_TRAINING = 500
 LEARN_FREQUENCY = 1
 ACTION_DICT = {
-    0: 'move 1',  # Move one block forward
-    1: 'turn 1',  # Turn 90 degrees to the right
-    2: 'turn -1',  # Turn 90 degrees to the left
-    3: 'attack 1'  # Destroy block
+    0: 'forward',  
+    1: 'back',  
+    2: 'left', 
+    3: 'right' 
 }
+
+my_mission, my_clients, my_mission_record = None, None, None
 
 
 # Q-Value Network
@@ -72,11 +74,13 @@ class QNetwork(nn.Module):
 
 
 def GetMissionXML():
-        return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+    air = '\n\t\t\t'.join([f'<DrawBlock x="{-1*i}" y="250" z="-746" type="air"/>' for i in range(610, 615)])
+    print(air)
+    return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
                 <About>
-                    <Summary>TheUltimateDropper AI</Summary>
+                    <Summary>Diamond Collector</Summary>
                 </About>
 
                 <ServerSection>
@@ -88,13 +92,20 @@ def GetMissionXML():
                         <Weather>clear</Weather>
                     </ServerInitialConditions>
                     <ServerHandlers>
-                        <FileWorldGenerator src="Project\TheUltimateDropper\DropperMap"/>
+                        <FileWorldGenerator src="C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\DropperMap"/>
+                        <DrawingDecorator>''' + air + '''</DrawingDectorator>
                         <ServerQuitWhenAnyAgentFinishes/>
                     </ServerHandlers>
                 </ServerSection>
 
                 <AgentSection mode="Survival">
-                    <Name>TheUltimateDropper</Name>
+                    <Name>CS175DiamondCollector</Name>
+                    <AgentStart>
+                        <Placement x="-611" y="252" z="-745.5" pitch="90" yaw="180"/>
+                        <Inventory>
+                            <InventoryItem slot="0" type="diamond_pickaxe"/>
+                        </Inventory>
+                    </AgentStart>
                     <AgentHandlers>
                         <RewardForCollectingItem>
                             <Item reward="2" type="diamond"/>
@@ -131,8 +142,8 @@ def get_action(obs, q_network, epsilon, allow_break_action):
         action (int): chosen action [0, action_size)
     """
   
-    if np.random.ranf() <= epsilon:
-        return np.random.choice([0, 1, 2, 3])
+    #if np.random.ranf() <= epsilon:
+    return np.random.choice([0, 1, 2, 3])
     
     # Prevent computation graph from being calculated
     with torch.no_grad():
@@ -154,18 +165,20 @@ def init_malmo(agent_host):
     """
     Initialize new malmo mission.
     """
-    my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
-    my_mission_record = MalmoPython.MissionRecordSpec()
-    my_mission.requestVideo(800, 500)
-    my_mission.setViewpoint(1)
-
+    global my_mission, my_clients, my_mission_record
     max_retries = 3
-    my_clients = MalmoPython.ClientPool()
-    my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
-
+    if my_mission is None:
+        my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
+        my_mission.requestVideo(800, 500)
+        my_mission.setViewpoint(1)
+       
+        my_clients = MalmoPython.ClientPool()
+        my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
+        
     for retry in range(max_retries):
         try:
-            agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "TheUltimateDropper" )
+            agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "DiamondCollector" )
             break
         except RuntimeError as e:
             if retry == max_retries - 1:
@@ -318,6 +331,7 @@ def train(agent_host):
     # Begin main loop
     loop = tqdm(total=MAX_GLOBAL_STEPS, position=0, leave=False)
     while global_step < MAX_GLOBAL_STEPS:
+        time.sleep(1)
         episode_step = 0
         episode_return = 0
         episode_loss = 0
@@ -338,25 +352,41 @@ def train(agent_host):
             # Get action
             allow_break_action = obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1
             action_idx = get_action(obs, q_network, epsilon, allow_break_action)
-            command = ACTION_DICT[action_idx]
-
-            # Take step
-            agent_host.sendCommand(command)
-            
-
+            agent_host.sendCommand('strafe -1')
+            '''
+            # forward
+            if action_idx == 0:
+                agent_host.sendCommand('strafe 1')
+            # back
+            elif action_idx == 1:
+                agent_host.sendCommand('strafe -1')
+            # left
+            elif action_idx == 2:
+                agent_host.sendCommand('turn -1')
+                agent_host.sendCommand('strafe 1')
+                agent_host.sendCommand('turn 1')
+            #right
+            elif action_idx == 3:
+                agent_host.sendCommand('turn 1')
+                agent_host.sendCommand('strafe 1')
+                agent_host.sendCommand('turn -1')
+            '''
             # If your agent isn't registering reward you may need to increase this
-            time.sleep(.1)
+            time.sleep(.5)
 
             # We have to manually calculate terminal state to give malmo time to register the end of the mission
             # If you see "commands connection is not open. Is the mission running?" you may need to increase this
             episode_step += 1
+
+            '''
             if episode_step >= MAX_EPISODE_STEPS or \
                     (obs[0, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1 and \
                     obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 0 and \
                     command == 'move 1'):
                 done = True
                 time.sleep(2)  
-
+            '''
+            
             # Get next observation
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
