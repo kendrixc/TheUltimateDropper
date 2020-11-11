@@ -81,7 +81,7 @@ def GetMissionXML():
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
                 <About>
-                    <Summary>Diamond Collector</Summary>
+                    <Summary>TheUltimateDropper</Summary>
                 </About>
 
                 <ServerSection>
@@ -100,12 +100,9 @@ def GetMissionXML():
                 </ServerSection>
 
                 <AgentSection mode="Survival">
-                    <Name>CS175DiamondCollector</Name>
+                    <Name>TheUltimateDropper_Agent</Name>
                     <AgentStart>
                         <Placement x="-611.5" y="252" z="-745.5" pitch="90" yaw="180"/>
-                        <Inventory>
-                            <InventoryItem slot="0" type="diamond_pickaxe"/>
-                        </Inventory>
                     </AgentStart>
                     <AgentHandlers>
                         <ContinuousMovementCommands/>
@@ -135,8 +132,8 @@ def get_action(obs, q_network, epsilon, allow_break_action):
         action (int): chosen action [0, action_size)
     """
   
-    #if np.random.ranf() <= epsilon:
-    return np.random.choice([0, 1, 2, 3])
+    if np.random.ranf() <= epsilon:
+        return np.random.choice([0, 1, 2, 3])
     
     # Prevent computation graph from being calculated
     with torch.no_grad():
@@ -171,7 +168,7 @@ def init_malmo(agent_host):
         
     for retry in range(max_retries):
         try:
-            agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "DiamondCollector" )
+            agent_host.startMission(my_mission, my_clients, my_mission_record, 0, "TheUltimateDropper")
             break
         except RuntimeError as e:
             if retry == max_retries - 1:
@@ -198,7 +195,8 @@ def get_observation(world_state):
         2 = WATER
     """
     obs = np.zeros((DEPTH, OBS_SIZE, OBS_SIZE))
-
+    pos = None
+    
     while world_state.is_mission_running:
         time.sleep(0.1)
         world_state = agent_host.getWorldState()
@@ -211,6 +209,7 @@ def get_observation(world_state):
             msg = world_state.observations[-1].text
             observations = json.loads(msg)
             # Get observation
+            pos = (observations['XPos'], observations['YPos'], observations['ZPos'])
             grid = observations['floorAll']
             grid_binary = []
             for x in grid:
@@ -222,7 +221,6 @@ def get_observation(world_state):
                     grid_binary.append(1)
                     
             obs = np.reshape(grid_binary, (DEPTH, OBS_SIZE, OBS_SIZE))
-            print(obs)
             # Rotate observation with orientation of agent
             yaw = observations['Yaw']
             if yaw == 270:
@@ -234,7 +232,7 @@ def get_observation(world_state):
             
             break
 
-    return obs
+    return obs, pos
 
 
 def prepare_batch(replay_buffer):
@@ -349,7 +347,7 @@ def train(agent_host):
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
                 print("\nError:",error.text)
-        obs = get_observation(world_state)
+        obs, pos = get_observation(world_state)
 
         # Run episode
         while world_state.is_mission_running:
@@ -370,7 +368,7 @@ def train(agent_host):
             elif action_idx == 3:
                 agent_host.sendCommand('strafe 1')
             
-
+            
             # We have to manually calculate terminal state to give malmo time to register the end of the mission
             # If you see "commands connection is not open. Is the mission running?" you may need to increase this
             episode_step += 1
@@ -379,17 +377,16 @@ def train(agent_host):
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
                 print("Error:", error.text)
-            next_obs = get_observation(world_state) 
+            next_obs, pos = get_observation(world_state) 
 
             # Get reward
-            '''
             reward = 0
-            for r in world_state.rewards:
-                reward += r.getValue()
-            episode_return += reward
-            '''
-            reward = 252 - 0
+            if pos is not None: reward = 252 - pos[1]
+            reward += 100 if next_obs[0][4][4] == 2 else 0
+            if next_obs[0][4][4] == 2: print("HERERE")
+            print(reward)
             # if block beneth the player is water +100
+
             # should make this more complex in the future such as
             # if its a clear path to water or +air blocks beneth player
             # (less blocks more reward)

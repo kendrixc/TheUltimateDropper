@@ -3,39 +3,16 @@ layout: default
 title:  Home
 ---
 
-The objective of this project is to implement the Dropper game in Minecraft using ML models, Neural Neworks and Reinforcement Learning to set a reward system.
-Source code: https://github.com/USER/PROJECT (_fix this_)
+GitHub Repository: [link][giitlink]
+[gitlink]:https://github.com/shreyakrishnam/TheUltimateDropper/tree/main/docs
+
+Summary:
+The goal of this project is to create an AI that can play the map The Dropper by Bigre. In the map, the player must complete 16 different levels; in each level the player starts off at the top of a large drop and must fall and land in a small puddle of water to avoid dying. On the way down there are several obstacles that will kill the player if they land on it moving too fast, as well as the water at the bottom being positioned differently for each map. For inputs the AI will receive blocks located directly around and below it (to a certain distance, to simulate a player only being able to see a certain distance), it’s distance from the ground level, as well as the target water block(s). The AI output will be simple in that it must specify a direction (NSEW) to strafe in at each time step, as well as determining what block to initially fall from.
+
+![The Dropper](dropper.png)
 
 Reports:
 
 - [Proposal](proposal.html)
 - [Status](status.html)
 - [Final](final.html)
-
-What's Markdown (`.md`)?
-
-Markdown is markup that lets you write hypertext (HTML) documents
-in easy-to-read and easy-to-write plain text.
-No angle brackets `<></>` required for
-paragraphs, lists, blockquotes, tables, etc.
-
-
-This is a paragraph (in Markdown). Some more
-text here.
-
-This is another paragraph.
-
-This is a list:
-
-- Orange
-- Apple
-- Blueberry
-
-$$x^2 = y^2$$
-
-
-Just getting started with Markdown?
-See the [HTML <-> Markdown Quick Reference (Cheat Sheet)][quickref].
-
-
-[quickref]: https://github.com/mundimark/quickrefs/blob/master/HTML.md
