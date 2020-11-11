@@ -23,7 +23,8 @@ from torch.utils.data import Dataset, DataLoader
 SIZE = 50
 REWARD_DENSITY = .1
 PENALTY_DENSITY = .02
-OBS_SIZE = 5
+OBS_SIZE = 11
+DEPTH = 20
 MAX_EPISODE_STEPS = 1000
 MAX_GLOBAL_STEPS = 100000
 REPLAY_BUFFER_SIZE = 10000
@@ -75,7 +76,7 @@ class QNetwork(nn.Module):
 
 def GetMissionXML():
     air = '\n\t\t\t'.join([f'<DrawBlock x="{-1*i}" y="250" z="-746" type="air"/>' for i in range(610, 615)])
-    print(air)
+
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
@@ -101,26 +102,18 @@ def GetMissionXML():
                 <AgentSection mode="Survival">
                     <Name>CS175DiamondCollector</Name>
                     <AgentStart>
-                        <Placement x="-611" y="252" z="-745.5" pitch="90" yaw="180"/>
+                        <Placement x="-611.5" y="252" z="-745.5" pitch="90" yaw="180"/>
                         <Inventory>
                             <InventoryItem slot="0" type="diamond_pickaxe"/>
                         </Inventory>
                     </AgentStart>
                     <AgentHandlers>
-                        <RewardForCollectingItem>
-                            <Item reward="2" type="diamond"/>
-                            <Item reward="-0.25" type="cobblestone"/>
-                        </RewardForCollectingItem>
-                        <RewardForTouchingBlockType>
-                            <Block type="lava" reward="-0.5"/>
-                            <Block type="bedrock" reward="-0.5"/>
-                        </RewardForTouchingBlockType>
-                        <DiscreteMovementCommands/>
+                        <ContinuousMovementCommands/>
                         <ObservationFromFullStats/>
                         <ObservationFromGrid>
                             <Grid name="floorAll">
-                                <min x="-'''+str(int(OBS_SIZE/2))+'''" y="-1" z="-'''+str(int(OBS_SIZE/2))+'''"/>
-                                <max x="'''+str(int(OBS_SIZE/2))+'''" y="0" z="'''+str(int(OBS_SIZE/2))+'''"/>
+                                <min x="-''' + str(int(OBS_SIZE/2)) + '''" y="-19" z="-''' + str(int(OBS_SIZE/2)) + '''"/>
+                                <max x="''' + str(int(OBS_SIZE/2)) + '''" y="0" z="''' + str(int(OBS_SIZE/2)) + '''"/>
                             </Grid>
                         </ObservationFromGrid>
                         <AgentQuitFromReachingCommandQuota total="'''+str(MAX_EPISODE_STEPS)+'''" />
@@ -200,12 +193,16 @@ def get_observation(world_state):
 
     Returns
         observation: <np.array>
+        0 = AIR
+        1 = NOT WATER AND NOT AIR
+        2 = WATER
     """
-    obs = np.zeros((2, OBS_SIZE, OBS_SIZE))
+    obs = np.zeros((DEPTH, OBS_SIZE, OBS_SIZE))
 
     while world_state.is_mission_running:
         time.sleep(0.1)
         world_state = agent_host.getWorldState()
+        
         if len(world_state.errors) > 0:
             raise AssertionError('Could not load grid.')
 
@@ -213,12 +210,19 @@ def get_observation(world_state):
             # First we get the json from the observation API
             msg = world_state.observations[-1].text
             observations = json.loads(msg)
-
             # Get observation
             grid = observations['floorAll']
-            grid_binary = [1 if x == 'diamond_ore' or x == 'lava' else 0 for x in grid]
-            obs = np.reshape(grid_binary, (2, OBS_SIZE, OBS_SIZE))
-
+            grid_binary = []
+            for x in grid:
+                if x == 'water':
+                    grid_binary.append(2)
+                elif x == 'air':
+                    grid_binary.append(0)
+                else:
+                    grid_binary.append(1)
+                    
+            obs = np.reshape(grid_binary, (DEPTH, OBS_SIZE, OBS_SIZE))
+            print(obs)
             # Rotate observation with orientation of agent
             yaw = observations['Yaw']
             if yaw == 270:
@@ -310,8 +314,8 @@ def train(agent_host):
         agent_host (MalmoPython.AgentHost)
     """
     # Init networks
-    q_network = QNetwork((2, OBS_SIZE, OBS_SIZE), len(ACTION_DICT))
-    target_network = QNetwork((2, OBS_SIZE, OBS_SIZE), len(ACTION_DICT))
+    q_network = QNetwork((DEPTH, OBS_SIZE, OBS_SIZE), len(ACTION_DICT))
+    target_network = QNetwork((DEPTH, OBS_SIZE, OBS_SIZE), len(ACTION_DICT))
     target_network.load_state_dict(q_network.state_dict())
 
     # Init optimizer
@@ -352,40 +356,24 @@ def train(agent_host):
             # Get action
             allow_break_action = obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1
             action_idx = get_action(obs, q_network, epsilon, allow_break_action)
-            agent_host.sendCommand('strafe -1')
-            '''
+            
             # forward
             if action_idx == 0:
-                agent_host.sendCommand('strafe 1')
+                agent_host.sendCommand('move 1')
             # back
             elif action_idx == 1:
-                agent_host.sendCommand('strafe -1')
+                agent_host.sendCommand('move -1')
             # left
             elif action_idx == 2:
-                agent_host.sendCommand('turn -1')
-                agent_host.sendCommand('strafe 1')
-                agent_host.sendCommand('turn 1')
+                agent_host.sendCommand('strafe -1')
             #right
             elif action_idx == 3:
-                agent_host.sendCommand('turn 1')
                 agent_host.sendCommand('strafe 1')
-                agent_host.sendCommand('turn -1')
-            '''
-            # If your agent isn't registering reward you may need to increase this
-            time.sleep(.5)
+            
 
             # We have to manually calculate terminal state to give malmo time to register the end of the mission
             # If you see "commands connection is not open. Is the mission running?" you may need to increase this
             episode_step += 1
-
-            '''
-            if episode_step >= MAX_EPISODE_STEPS or \
-                    (obs[0, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1 and \
-                    obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 0 and \
-                    command == 'move 1'):
-                done = True
-                time.sleep(2)  
-            '''
             
             # Get next observation
             world_state = agent_host.getWorldState()
@@ -394,11 +382,18 @@ def train(agent_host):
             next_obs = get_observation(world_state) 
 
             # Get reward
+            '''
             reward = 0
             for r in world_state.rewards:
                 reward += r.getValue()
             episode_return += reward
-
+            '''
+            reward = 252 - 0
+            # if block beneth the player is water +100
+            # should make this more complex in the future such as
+            # if its a clear path to water or +air blocks beneth player
+            # (less blocks more reward)
+     
             # Store step in replay buffer
             replay_buffer.append((obs, action_idx, next_obs, reward, done))
             obs = next_obs
@@ -433,7 +428,7 @@ if __name__ == '__main__':
     # Create default Malmo objects:
     agent_host = MalmoPython.AgentHost()
     try:
-        agent_host.parse( sys.argv )
+        agent_host.parse(sys.argv)
     except RuntimeError as e:
         print('ERROR:', e)
         print(agent_host.getUsage())
