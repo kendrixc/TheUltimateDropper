@@ -3,7 +3,7 @@ layout: default
 title:  Home
 ---
 
-GitHub Repository: [link][giitlink]
+GitHub Repository: [link][gitlink]
 [gitlink]:https://github.com/shreya-krishnam/TheUltimateDropper/tree/main/docs
 
 Summary:
