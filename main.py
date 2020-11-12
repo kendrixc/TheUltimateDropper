@@ -13,7 +13,6 @@ from collections import deque
 import matplotlib.pyplot as plt 
 import numpy as np
 from numpy.random import randint
-
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
@@ -42,6 +41,7 @@ ACTION_DICT = {
     2: 'left', 
     3: 'right' 
 }
+dist = [0]
 
 my_mission, my_clients, my_mission_record = None, None, None
 
@@ -132,8 +132,8 @@ def get_action(obs, q_network, epsilon, allow_break_action):
         action (int): chosen action [0, action_size)
     """
   
-    if np.random.ranf() <= epsilon:
-        return np.random.choice([0, 1, 2, 3])
+    #if np.random.ranf() <= epsilon:
+    return np.random.choice([0, 1, 2, 3])
     
     # Prevent computation graph from being calculated
     with torch.no_grad():
@@ -282,24 +282,15 @@ def learn(batch, optim, q_network, target_network):
     return loss.item()
 
 
-def log_returns(steps, returns):
-    """
-    Log the current returns as a graph and text file
+def log_returns():
+    plt.figure()
+    plt.plot(np.arange(1, 1 + len(dists)), dists)
+    plt.title('Distance Travelled')
+    plt.ylabel('Distance (in Blocks)')
+    plt.xlabel('Iteration')
+    plt.savefig('random_agent.png')
 
-    Args:
-        steps (list): list of global steps after each episode
-        returns (list): list of total return of each episode
-    """
-    box = np.ones(10) / 10
-    returns_smooth = np.convolve(returns, box, mode='same')
-    plt.clf()
-    plt.plot(steps, returns_smooth)
-    plt.title('Diamond Collector')
-    plt.ylabel('Return')
-    plt.xlabel('Steps')
-    plt.savefig('returns.png')
-
-    with open('returns.txt', 'w') as f:
+    with open('random_agent.txt', 'w') as f:
         for value in returns:
             f.write("{}\n".format(value)) 
 
@@ -381,9 +372,10 @@ def train(agent_host):
 
             # Get reward
             reward = 0
-            if pos is not None: reward = 252 - pos[1]
+            if pos is not None:
+                reward = 252 - pos[1]
+                dist[-1] = 252 - pos[1]
             reward += 100 if next_obs[0][4][4] == 2 else 0
-            if next_obs[0][4][4] == 2: print("HERERE")
             print(reward)
             # if block beneth the player is water +100
 
@@ -407,7 +399,8 @@ def train(agent_host):
 
                 if global_step % TARGET_UPDATE == 0:
                     target_network.load_state_dict(q_network.state_dict())
-
+    
+        
         num_episode += 1
         returns.append(episode_return)
         steps.append(global_step)
@@ -416,9 +409,10 @@ def train(agent_host):
         loop.set_description('Episode: {} Steps: {} Time: {:.2f} Loss: {:.2f} Last Return: {:.2f} Avg Return: {:.2f}'.format(
             num_episode, global_step, (time.time() - start_time) / 60, episode_loss, episode_return, avg_return))
 
-        if num_episode > 0 and num_episode % 10 == 0:
-            log_returns(steps, returns)
-            print()
+        if num_episode > 5:
+            log_returns()
+
+        dist.append(0)
 
 
 if __name__ == '__main__':
