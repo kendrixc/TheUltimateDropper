@@ -133,7 +133,7 @@ def get_action(obs, q_network, epsilon, allow_break_action):
     """
   
     #if np.random.ranf() <= epsilon:
-    return np.random.choice([0, 1, 2, 3])
+    return np.random.choice([0, 1, 2, 3, 4])
     
     # Prevent computation graph from being calculated
     with torch.no_grad():
@@ -284,15 +284,11 @@ def learn(batch, optim, q_network, target_network):
 
 def log_returns():
     plt.figure()
-    plt.plot(np.arange(1, 1 + len(dists)), dists)
+    plt.plot(np.arange(1, 1 + len(dist)), dist)
     plt.title('Distance Travelled')
     plt.ylabel('Distance (in Blocks)')
     plt.xlabel('Iteration')
     plt.savefig('random_agent.png')
-
-    with open('random_agent.txt', 'w') as f:
-        for value in returns:
-            f.write("{}\n".format(value)) 
 
 
 def train(agent_host):
@@ -358,7 +354,9 @@ def train(agent_host):
             #right
             elif action_idx == 3:
                 agent_host.sendCommand('strafe 1')
-            
+            # don't move
+            elif action_idx == 4:
+                pass
             
             # We have to manually calculate terminal state to give malmo time to register the end of the mission
             # If you see "commands connection is not open. Is the mission running?" you may need to increase this
@@ -409,7 +407,7 @@ def train(agent_host):
         loop.set_description('Episode: {} Steps: {} Time: {:.2f} Loss: {:.2f} Last Return: {:.2f} Avg Return: {:.2f}'.format(
             num_episode, global_step, (time.time() - start_time) / 60, episode_loss, episode_return, avg_return))
 
-        if num_episode > 5:
+        if num_episode > 20:
             log_returns()
 
         dist.append(0)
