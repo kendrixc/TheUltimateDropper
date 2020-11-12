@@ -33,13 +33,14 @@ BATCH_SIZE = 128
 GAMMA = .9
 TARGET_UPDATE = 100
 LEARNING_RATE = 1e-4
-START_TRAINING = 500
+START_TRAINING = 130
 LEARN_FREQUENCY = 1
 ACTION_DICT = {
     0: 'forward',  
     1: 'back',  
     2: 'left', 
-    3: 'right' 
+    3: 'right',
+    4: 'nothing'
 }
 dist = [0]
 
@@ -131,10 +132,13 @@ def get_action(obs, q_network, epsilon, allow_break_action):
     Returns:
         action (int): chosen action [0, action_size)
     """
-  
+
+    #print(epsilon)
     #if np.random.ranf() <= epsilon:
+    #    print("RANDOM")
     return np.random.choice([0, 1, 2, 3, 4])
-    
+
+    print("OTHER")
     # Prevent computation graph from being calculated
     with torch.no_grad():
         # Calculate Q-values fot each action
@@ -198,7 +202,6 @@ def get_observation(world_state):
     pos = None
     
     while world_state.is_mission_running:
-        time.sleep(0.1)
         world_state = agent_host.getWorldState()
         
         if len(world_state.errors) > 0:
@@ -371,9 +374,12 @@ def train(agent_host):
             # Get reward
             reward = 0
             if pos is not None:
-                reward = 252 - pos[1]
+                reward = ((252 - pos[1]) / 10)**2
                 dist[-1] = 252 - pos[1]
-            reward += 100 if next_obs[0][4][4] == 2 else 0
+            if next_obs[0][4][4] == 2 or next_obs[1][4][4] == 2:
+                reward += 500
+                done = True
+            
             print(reward)
             # if block beneth the player is water +100
 
@@ -409,6 +415,7 @@ def train(agent_host):
 
         if num_episode > 20:
             log_returns()
+            exit(1)
 
         dist.append(0)
 
