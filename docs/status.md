@@ -16,10 +16,14 @@ The Q - Network is a Deep Neural Network with 4 layers and the input takes a ten
 ## Evaluation
 The agent will be evaluated on two main factors—how close it gets to the bottom of the level, and if it lands in the water (doesn’t die).  The combination of these two factors we believe will be enough to train an AI to both avoid obstacles while targeting the correct landing position.
 Currently, we have a working random agent by randomly choosing one of the four directions to move in, or not at all, at each time step.  Below is a graph showing the distance traveled by the agent across 20 trials (higher is better—with 252 meaning it made it to the bottom since the level is 252 blocks high).
+
 ![Random Agent Progress](random.png)
+
 This clearly shows that the distance the agent travels is random and that the agent is not very good, as one would expect.  As we discuss in the next section, we expect this to improve dramatically as we improve our algorithm.
 Out of curiosity, we also tested out a Greedy-Epsilon Q-Table algorithm (as used in assignment 2), although we did not expect to use this for our final AI since it is not practical to store a table for all 3*2000! combinations of blocks in our observation space.  Below is a graph showing the AI on a simple level over 175 iterations.
+
 ![Greedy Agent](q_table.png)
+
 The limitations of this algorithm are shown well here since it is hard to distinguish this between just a random AI—our observation space is just too large for a Q-Table to practically work.
 
 ## Remaining Goals and Challenges
