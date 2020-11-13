@@ -138,7 +138,6 @@ def get_action(obs, q_network, epsilon, allow_break_action):
     #    print("RANDOM")
     return np.random.choice([0, 1, 2, 3, 4])
 
-    print("OTHER")
     # Prevent computation graph from being calculated
     with torch.no_grad():
         # Calculate Q-values fot each action
