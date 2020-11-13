@@ -10,6 +10,11 @@ The goal of this project is to create an AI that can play the map The Dropper by
 
 ![The Dropper](dropper.png)
 
+## Group Meet Time
+
+Tuesdays 2:00pm – 3:30pm 
+
+
 ## Reports:
 
 - [Proposal](proposal.html)
