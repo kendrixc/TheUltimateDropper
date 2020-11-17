@@ -17,6 +17,13 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
+import keras
+from keras.models import Sequential,Input,Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv3D, MaxPooling3D
+from keras.layers.normalization import BatchNormalization
+from keras.layers.advanced_activations import LeakyReLU
+
 
 # Hyperparameters
 SIZE = 50
@@ -43,6 +50,9 @@ ACTION_DICT = {
     4: 'nothing'
 }
 dist = [0]
+
+AIR, OTHER_BLOCK, WATER = 0, 1, 2
+LEVEL = 1
 
 my_mission, my_clients, my_mission_record = None, None, None
 
@@ -75,8 +85,49 @@ class QNetwork(nn.Module):
         return self.net(obs_flat)
 
 
+class CNN:
+    
+    def __init__(self):
+        self.model = Sequential()fashion_model
+        self.model.add(Conv3D(32, kernel_size = (3, 3), activation = 'linear', input_shape = (OBS_SIZE, OBS_SIZE, DEPTH), padding = 'same'))
+        self.model.add(LeakyReLU(alpha = 0.1))
+        self.model.add(MaxPooling3D((2, 2), padding = 'same'))
+        self.model.add(Conv3D(64, (3, 3), activation = 'linear', padding = 'same'))
+        self.model.add(LeakyReLU(alpha=0.1))
+        self.model.add(MaxPooling3D(pool_size = (2, 2), padding = 'same'))
+        self.model.add(Conv3D(128, (3, 3), activation = 'linear', padding = 'same'))
+        self.model.add(LeakyReLU(alpha = 0.1))                  
+        self.model.add(MaxPooling3D(pool_size = (2, 2), padding = 'same'))
+        self.model.add(Flatten())
+        self.model.add(Dense(128, activation =' linear'))
+        self.model.add(LeakyReLU(alpha = 0.1))                  
+        self.model.add(Dense(5, activation='softmax'))
+        fashion_model.compile(loss = keras.losses.categorical_crossentropy, optimizer = keras.optimizers.Adam(), metrics = ['accuracy'])
+
+    def forward(self, obs):
+        # NEED TO ADD THIS PART
+        pass
+
+
 def GetMissionXML():
-    air = '\n\t\t\t'.join([f'<DrawBlock x="{-1*i}" y="250" z="-746" type="air"/>' for i in range(610, 615)])
+
+    # be sure to change this to YOUR PATH
+    path = 'C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\DropperMap'
+
+    # change the starting position based on the level chosen
+    if LEVEL == 1: pos = 'x="-611.5" y="252" z="-745.5"'
+    elif LEVEL == 2: pos = 'x="-634.5" y="252" z="-690.5"'
+    elif LEVEL == 3: pos = 'x="-581.5" y="252" z="-698.5"'
+    elif LEVEL == 4: pos = 'x="-555.5" y="252" z="-750.5"'
+    elif LEVEL == 5: pos = 'x="-524.5" y="252" z="-755.5"'
+    elif LEVEL == 6: pos = 'x="-456.5" y="252" z="-749.5"'
+    elif LEVEL == 7: pos = 'x="-442.5" y="252" z="-672.5"'
+    elif LEVEL == 8: pos = 'x="-527.5" y="252" z="-661.5"'
+    elif LEVEL == 9: pos = 'x="-487.5" y="252" z="-625.5"'
+    elif LEVEL == 10: pos = 'x="-445.5" y="252" z="-622.5"'
+    elif LEVEL == 11: pos = 'x="-416.5" y="252" z="-628.5"'
+    elif LEVEL == 12: pos = 'x="-363.5" y="248" z="-644.5"'
+    elif LEVEL == 13: pos = 'x="-361.5" y="240" z="-708.5"'
 
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -94,8 +145,7 @@ def GetMissionXML():
                         <Weather>clear</Weather>
                     </ServerInitialConditions>
                     <ServerHandlers>
-                        <FileWorldGenerator src="C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\DropperMap"/>
-                        <DrawingDecorator>''' + air + '''</DrawingDectorator>
+                        <FileWorldGenerator src="''' + path + '''"/>
                         <ServerQuitWhenAnyAgentFinishes/>
                     </ServerHandlers>
                 </ServerSection>
@@ -103,14 +153,14 @@ def GetMissionXML():
                 <AgentSection mode="Survival">
                     <Name>TheUltimateDropper_Agent</Name>
                     <AgentStart>
-                        <Placement x="-611.5" y="252" z="-745.5" pitch="90" yaw="180"/>
+                        <Placement ''' + pos + ''' pitch="90" yaw="180"/>
                     </AgentStart>
                     <AgentHandlers>
                         <ContinuousMovementCommands/>
                         <ObservationFromFullStats/>
                         <ObservationFromGrid>
                             <Grid name="floorAll">
-                                <min x="-''' + str(int(OBS_SIZE/2)) + '''" y="-19" z="-''' + str(int(OBS_SIZE/2)) + '''"/>
+                                <min x="-''' + str(int(OBS_SIZE/2)) + '''" y="-''' + str(DEPTH - 1) + '''" z="-''' + str(int(OBS_SIZE/2)) + '''"/>
                                 <max x="''' + str(int(OBS_SIZE/2)) + '''" y="0" z="''' + str(int(OBS_SIZE/2)) + '''"/>
                             </Grid>
                         </ObservationFromGrid>
@@ -133,10 +183,7 @@ def get_action(obs, q_network, epsilon, allow_break_action):
         action (int): chosen action [0, action_size)
     """
 
-    #print(epsilon)
-    #if np.random.ranf() <= epsilon:
-    #    print("RANDOM")
-    return np.random.choice([0, 1, 2, 3, 4])
+    if np.random.ranf() <= epsilon: return np.random.choice([0, 1, 2, 3, 4])
 
     # Prevent computation graph from being calculated
     with torch.no_grad():
@@ -193,9 +240,6 @@ def get_observation(world_state):
 
     Returns
         observation: <np.array>
-        0 = AIR
-        1 = NOT WATER AND NOT AIR
-        2 = WATER
     """
     obs = np.zeros((DEPTH, OBS_SIZE, OBS_SIZE))
     pos = None
@@ -213,6 +257,7 @@ def get_observation(world_state):
             # Get observation
             pos = (observations['XPos'], observations['YPos'], observations['ZPos'])
             grid = observations['floorAll']
+            print(len(grid))
             grid_binary = []
             for x in grid:
                 if x == 'water':
@@ -225,8 +270,7 @@ def get_observation(world_state):
             obs = np.reshape(grid_binary, (DEPTH, OBS_SIZE, OBS_SIZE))
             # Rotate observation with orientation of agent
             yaw = observations['Yaw']
-            if yaw == 270:
-                obs = np.rot90(obs, k=1, axes=(1, 2))
+            if yaw == 270: obs = np.rot90(obs, k=1, axes=(1, 2))
             elif yaw == 0:
                 obs = np.rot90(obs, k=2, axes=(1, 2))
             elif yaw == 90:
@@ -290,7 +334,7 @@ def log_returns():
     plt.title('Distance Travelled')
     plt.ylabel('Distance (in Blocks)')
     plt.xlabel('Iteration')
-    plt.savefig('random_agent.png')
+    plt.savefig('distance_plot.png')
 
 
 def train(agent_host):
@@ -345,20 +389,15 @@ def train(agent_host):
             action_idx = get_action(obs, q_network, epsilon, allow_break_action)
             
             # forward
-            if action_idx == 0:
-                agent_host.sendCommand('move 1')
+            if action_idx == 0: agent_host.sendCommand('move 1')
             # back
-            elif action_idx == 1:
-                agent_host.sendCommand('move -1')
+            elif action_idx == 1: agent_host.sendCommand('move -1')
             # left
-            elif action_idx == 2:
-                agent_host.sendCommand('strafe -1')
+            elif action_idx == 2: agent_host.sendCommand('strafe -1')
             #right
-            elif action_idx == 3:
-                agent_host.sendCommand('strafe 1')
+            elif action_idx == 3: agent_host.sendCommand('strafe 1')
             # don't move
-            elif action_idx == 4:
-                pass
+            elif action_idx == 4: pass
             
             # We have to manually calculate terminal state to give malmo time to register the end of the mission
             # If you see "commands connection is not open. Is the mission running?" you may need to increase this
@@ -373,18 +412,19 @@ def train(agent_host):
             # Get reward
             reward = 0
             if pos is not None:
-                reward = ((252 - pos[1]) / 10)**2
+                # make distance to ground an exponential function
+                # so that it gets rewarded more for getting closer
+                reward += np.exp((252 - pos[1])/45)
                 dist[-1] = 252 - pos[1]
-            if next_obs[0][4][4] == 2 or next_obs[1][4][4] == 2:
-                reward += 500
-                done = True
-            
-            print(reward)
-            # if block beneth the player is water +100
-
-            # should make this more complex in the future such as
-            # if its a clear path to water or +air blocks beneth player
-            # (less blocks more reward)
+                
+                # reward it for having air blocks in the path directly below
+                # it, give it a negative reward for other blocks, and a big
+                # positive reward for having water in the path
+                for i in range(2 * int(OBS_SIZE / 2)):
+                    block = next_obs[i][int(OBS_SIZE / 2)][int(OBS_SIZE / 2)]
+                    if block == AIR: reward += 10
+                    elif block == OTHER_BLOCK: reward -= 20
+                    elif block == WATER: reward += 50
      
             # Store step in replay buffer
             replay_buffer.append((obs, action_idx, next_obs, reward, done))
