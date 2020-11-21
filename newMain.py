@@ -13,23 +13,30 @@ from collections import deque
 import matplotlib.pyplot as plt 
 import numpy as np
 from numpy.random import randint
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader
 
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
+import keras
+from keras.models import Sequential,Input,Model
+from keras.layers import Dense, Dropout, Flatten
+from keras.layers import Conv3D, MaxPooling3D
+from keras.layers.normalization import BatchNormalization
+from keras.layers.advanced_activations import LeakyReLU
+from keras.models import model_from_json
 
 # Hyperparameters
 SIZE = 50
 REWARD_DENSITY = .1
 PENALTY_DENSITY = .02
-OBS_SIZE = 17
+OBS_SIZE = 11
 DEPTH = 20
 MAX_EPISODE_STEPS = 1000
 MAX_GLOBAL_STEPS = 100000
 REPLAY_BUFFER_SIZE = 10000
 EPSILON_DECAY = .999
 MIN_EPSILON = .1
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 GAMMA = .9
 TARGET_UPDATE = 100
 LEARNING_RATE = 1e-4
@@ -42,7 +49,6 @@ ACTION_DICT = {
     3: 'right',
     4: 'nothing'
 }
-NUM_ACTIONS = 5
 my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
@@ -50,6 +56,35 @@ AIR, OTHER_BLOCK, WATER = 0, 1, 2
 LEVEL = 1
 # be sure to change this to YOUR PATH
 path = 'C:/Users/AnthonyN/Desktop/TheUltimateDropper/DropperMap'
+
+
+class CNN:
+    
+    def __init__(self, obs_size, action_size):
+        self.model = Sequential()
+        self.model.add(Conv3D(32, kernel_size = (3, 3, 3), activation = 'linear', input_shape = obs_size, padding = 'same'))
+        self.model.add(LeakyReLU(alpha = 0.1))
+        self.model.add(MaxPooling3D((2, 2, 2), padding = 'same'))
+        self.model.add(Conv3D(64, (3, 3, 3), activation = 'linear', padding = 'same'))
+        self.model.add(LeakyReLU(alpha=0.1))
+        self.model.add(MaxPooling3D(pool_size = (2, 2, 2), padding = 'same'))
+        self.model.add(Conv3D(128, (3, 3, 3), activation = 'linear', padding = 'same'))
+        self.model.add(LeakyReLU(alpha = 0.1))                  
+        self.model.add(MaxPooling3D(pool_size = (2, 2, 2), padding = 'same'))
+        self.model.add(Flatten())
+        self.model.add(Dense(128, activation = 'linear'))
+        self.model.add(LeakyReLU(alpha = 0.1))                  
+        self.model.add(Dense(action_size, activation = 'softmax'))
+        self.model.compile(loss = keras.losses.categorical_crossentropy, optimizer = keras.optimizers.Adam(), metrics = ['accuracy'])
+
+    def forward(self, obs) -> 'Prediction Tensor':
+        return self.model.predict(obs.view(obs.shape[0], -1))
+
+    def get_model(self) -> 'JSON Model':
+        return self.model.to_json()
+
+    def load_model(self, json_model) -> None:
+        self.model = model_from_json(json_model)
 
 
 def GetMissionXML():
@@ -110,35 +145,50 @@ def GetMissionXML():
             </Mission>'''
 
 
-def create_model(obs_size):
-    inputs = layers.Input(shape = obs_size)
-    layer1 = layers.Conv3D(32, kernel_size = (3, 3, 3), activation = 'relu', padding = 'same')(inputs)
-    layer2 = layers.MaxPooling3D((2, 2, 2), padding = 'same')(layer1)
-    layer3 = layers.Conv3D(64, (3, 3, 3), activation = 'relu', padding = 'same')(layer2)
-    layer4 = layers.MaxPooling3D((2, 2, 2), padding = 'same')(layer3)
-    layer5 = layers.Conv3D(128, (3, 3, 3), activation = 'relu', padding = 'same')(layer4)
-    layer6 = layers.MaxPooling3D(pool_size = (2, 2, 2), padding = 'same')(layer5)
-    layer7 = layers.Flatten()(layer6)
-    layer8 = layers.Dense(128, activation = 'relu')(layer7)
-    action = layers.Dense(NUM_ACTIONS, activation = 'linear')(layer8)
-    return keras.Model(inputs = inputs, outputs = action)
-
-
-def get_action(obs, model, epsilon, allow_break_action):
+def get_action(obs, cnn, epsilon, allow_break_action):
     """Select action according to e-greedy policy"""
-    
-    if np.random.ranf() <= epsilon:
-        action = np.random.choice(NUM_ACTIONS)
-        print(f'R {action} ', end = '')
-    else:
-        obs = tf.convert_to_tensor(obs)
-        obs = tf.expand_dims(obs, 0)
-        action_probs = model(obs, training = False)
-        action = tf.argmax(action_probs[0].numpy())
-        print(f'A {action} ', end = '')
 
-    return action
+    if np.random.ranf() <= epsilon: return np.random.choice([0, 1, 2, 3, 4])
+
+    # Prevent computation graph from being calculated
+    with torch.no_grad():
+        # Calculate probabilities of each action
+        obs_torch = torch.tensor(obs.copy(), dtype=torch.float).unsqueeze(0)
+        action_values = cnn.forward(obs_torch)
+        # Select action with highest value **MAY WANT TO CHANGE THIS**
+        action_idx = torch.argmax(action_values).item()
+        
+    return action_idx
+
+
+def init_malmo(agent_host):
+    """Initialize new malmo mission"""
     
+    global my_mission, my_clients, my_mission_record
+    max_retries = 3
+    if my_mission is None:
+        my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
+        my_mission.requestVideo(800, 500)
+        my_mission.setViewpoint(1)
+       
+        my_clients = MalmoPython.ClientPool()
+        my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
+        
+    for retry in range(max_retries):
+        try:
+            agent_host.startMission(my_mission, my_clients, my_mission_record, 0, "TheUltimateDropper")
+            break
+        except RuntimeError as e:
+            if retry == max_retries - 1:
+                print("Error starting mission:", e)
+                exit(1)
+            else:
+                time.sleep(2)
+
+    return agent_host
+
+
 def get_observation(world_state):
     """Use the agent observation API to get a 20 x 10 x 10 grid around the agent"""
     
@@ -176,47 +226,74 @@ def get_observation(world_state):
 
 
 def prepare_batch(replay_buffer):
-    """Randomly sample batch from replay buffer and prepare tensors"""
+    """
+    Randomly sample batch from replay buffer and prepare tensors
 
+    Args:
+        replay_buffer (list): obs, action, next_obs, reward, done tuples
+
+    Returns:
+        obs (tensor): float tensor of size (BATCH_SIZE x obs_size
+        action (tensor): long tensor of size (BATCH_SIZE)
+        next_obs (tensor): float tensor of size (BATCH_SIZE x obs_size)
+        reward (tensor): float tensor of size (BATCH_SIZE)
+        done (tensor): float tensor of size (BATCH_SIZE)
+    """
     batch_data = random.sample(replay_buffer, BATCH_SIZE)
-    obs = tf.convert_to_tensor([x[0] for x in batch_data], dtype = tf.float32)
-    action = tf.convert_to_tensor([x[1] for x in batch_data], dtype = tf.int32)
-    next_obs = tf.convert_to_tensor([x[2] for x in batch_data], dtype = tf.float32)
-    reward = tf.convert_to_tensor([x[3] for x in batch_data], dtype = tf.float32)
-    done = tf.convert_to_tensor([x[4] for x in batch_data], dtype = tf.float32)
+    obs = torch.tensor([x[0] for x in batch_data], dtype=torch.float)
+    action = torch.tensor([x[1] for x in batch_data], dtype=torch.long)
+    next_obs = torch.tensor([x[2] for x in batch_data], dtype=torch.float)
+    reward = torch.tensor([x[3] for x in batch_data], dtype=torch.float)
+    done = torch.tensor([x[4] for x in batch_data], dtype=torch.float)
+    
     return obs, action, next_obs, reward, done
   
 
-def learn(batch, model, model_target, optim, loss_func):
+def learn(batch, cnn, target_network):
     """Update CNN according to DQN Loss function"""
 
     obs, action, next_obs, reward, done = batch
-    future_rewards = model_target.predict(next_obs)
-    updated_q_values = reward + GAMMA * tf.reduce_max(future_rewards, axis = 1) * (1 - done)
-    masks = tf.one_hot(action, NUM_ACTIONS)
-    with tf.GradientTape() as tape:
-        q_values = model(obs)
-        q_action = tf.reduce_sum(tf.multiply(q_values, masks), axis = 1)
-        loss = loss_func(updated_q_values, q_action)
 
-    grads = tape.gradient(loss, model.trainable_variables)
-    optim.apply_gradients(zip(grads, model.trainable_variables))
-    return loss
-    
+    print (obs.shape, action, next_obs.shape, reward)
+
+    optim.zero_grad()
+    values = cnn.forward(obs).gather(1, action.unsqueeze(-1)).squeeze(-1)
+    target = torch.max(target_network(next_obs), 1)[0]
+    target = reward + GAMMA * target * (1 - done)
+    loss = torch.mean((target - values) ** 2)
+    loss.backward()
+    optim.step()
+
+    return loss.item()
+
+
+def log_returns():
+    plt.figure()
+    plt.plot(np.arange(1, 1 + len(dist)), dist)
+    plt.title('Distance Travelled')
+    plt.ylabel('Distance (in Blocks)')
+    plt.xlabel('Iteration')
+    plt.savefig('distance_plot.png')
+
 
 def train(agent_host):
-    """Main loop for the DQN learning algorithm"""
+    """
+    Main loop for the DQN learning algorithm
 
+    Args:
+        agent_host (MalmoPython.AgentHost)
+    """
     # Init networks
-    model = create_model((DEPTH, OBS_SIZE, OBS_SIZE, 1))
-    model_target = create_model((DEPTH, OBS_SIZE, OBS_SIZE, 1))
+    cnn = CNN((DEPTH, OBS_SIZE, OBS_SIZE, 1), len(ACTION_DICT))
+    target_network = CNN((DEPTH, OBS_SIZE, OBS_SIZE, 1), len(ACTION_DICT))
+    target_network.load_model(cnn.get_model())
 
     # Init optimizer
-    optim = keras.optimizers.Adam(learning_rate = LEARNING_RATE, clipnorm = 1.0)
+    #optim = torch.optim.Adam(cnn.parameters(), lr = LEARNING_RATE)
+
     # Init replay buffer
     replay_buffer = deque(maxlen = REPLAY_BUFFER_SIZE)
-    # Init loss function
-    loss_func = keras.losses.Huber()
+
     # Init vars
     global_step = 0
     num_episode = 0
@@ -248,7 +325,7 @@ def train(agent_host):
         while world_state.is_mission_running:
             # Get action
             allow_break_action = obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1
-            action_idx = get_action(obs, model, epsilon, allow_break_action)
+            action_idx = get_action(obs, cnn, epsilon, allow_break_action)
             
             # forward
             if action_idx == 0: agent_host.sendCommand('move 1')
@@ -296,14 +373,14 @@ def train(agent_host):
             global_step += 1
             if global_step > START_TRAINING and global_step % LEARN_FREQUENCY == 0:
                 batch = prepare_batch(replay_buffer)
-                loss = learn(batch, model, model_target, optim, loss_func)
+                loss = learn(batch, cnn, target_network)
                 episode_loss += loss
 
                 if epsilon > MIN_EPSILON:
                     epsilon *= EPSILON_DECAY
 
                 if global_step % TARGET_UPDATE == 0:
-                    model_target.set_weights(model.get_weights())
+                    target_network.load_state_dict(cnn.state_dict())
     
         
         num_episode += 1
@@ -314,48 +391,11 @@ def train(agent_host):
         loop.set_description('Episode: {} Steps: {} Time: {:.2f} Loss: {:.2f} Last Return: {:.2f} Avg Return: {:.2f}'.format(
             num_episode, global_step, (time.time() - start_time) / 60, episode_loss, episode_return, avg_return))
 
-        if num_episode > 100:
+        if num_episode > 20:
             log_returns()
             exit(1)
 
         dist.append(0)
-
-
-def log_returns():
-    plt.figure()
-    plt.plot(np.arange(1, 1 + len(dist)), dist)
-    plt.title('Distance Travelled')
-    plt.ylabel('Distance (in Blocks)')
-    plt.xlabel('Iteration')
-    plt.savefig('distance_plot.png')
-
-
-def init_malmo(agent_host):
-    """Initialize new malmo mission"""
-    
-    global my_mission, my_clients, my_mission_record
-    max_retries = 3
-    if my_mission is None:
-        my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
-        my_mission_record = MalmoPython.MissionRecordSpec()
-        my_mission.requestVideo(800, 500)
-        my_mission.setViewpoint(1)
-       
-        my_clients = MalmoPython.ClientPool()
-        my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
-        
-    for retry in range(max_retries):
-        try:
-            agent_host.startMission(my_mission, my_clients, my_mission_record, 0, "TheUltimateDropper")
-            break
-        except RuntimeError as e:
-            if retry == max_retries - 1:
-                print("Error starting mission:", e)
-                exit(1)
-            else:
-                time.sleep(2)
-
-    return agent_host
 
 
 if __name__ == '__main__':
