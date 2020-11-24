@@ -40,7 +40,7 @@ my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 2
+LEVEL = 1
 # be sure to change this to YOUR PATH
 path = 'C:/Users/AnthonyN/Desktop/TheUltimateDropper/DropperMap'
 
@@ -165,7 +165,10 @@ def get_observation(world_state):
 
 def prepare_batch(replay_buffer):
     """Randomly sample batch from replay buffer and prepare tensors"""
-    batch_data = random.sample(replay_buffer, BATCH_SIZE)
+    if BATCH_SIZE < len(replay_buffer):
+        batch_data = random.sample(replay_buffer, BATCH_SIZE)
+    else:
+        batch_data = replay_buffer
     obs = tf.convert_to_tensor([x[0] for x in batch_data], dtype = tf.float32)
     action = tf.convert_to_tensor([x[1] for x in batch_data], dtype = tf.int32)
     next_obs = tf.convert_to_tensor([x[2] for x in batch_data], dtype = tf.float32)
@@ -271,7 +274,6 @@ def train(agent_host):
                 reward += 2 * np.exp((252 - pos[1])/45)
                 #reward = 2 * (252 - pos[1])
                 dist[-1] = 252 - pos[1]
-                print(reward)
                 # reward it for having air blocks in the path around and directly below
                 # it, give it a negative reward for other blocks, and a big
                 # positive reward for having water in the path
@@ -279,7 +281,6 @@ def train(agent_host):
                 reward_obs = next_obs[:,s-2 : s+3,s-2 : s+3]
                 #reward += 1 * len(reward_obs[reward_obs == AIR])
                 reward += 30 * len(reward_obs[reward_obs == WATER])
-                print('After blocks', reward)
             # Store step in replay buffer
             replay_buffer.append((obs, action_idx, next_obs, reward, done))
             obs = next_obs
@@ -308,7 +309,6 @@ def train(agent_host):
         if num_episode % 100 == 0:
             log_returns(num_episode)
             model.save(f'MODEL_INFO_{num_episode}')
-            exit(1)
 
         dist.append(0)
 
