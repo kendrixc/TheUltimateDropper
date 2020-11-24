@@ -22,59 +22,51 @@ from tensorflow.keras import layers
 SIZE = 50
 REWARD_DENSITY = .1
 PENALTY_DENSITY = .02
-OBS_SIZE = 17
-DEPTH = 20
+OBS_SIZE = 31 # MUST BE AN ODD NUMBER
+DEPTH = 40
 MAX_EPISODE_STEPS = 1000
 MAX_GLOBAL_STEPS = 100000
 REPLAY_BUFFER_SIZE = 10000
 EPSILON_DECAY = .999
 MIN_EPSILON = .1
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 GAMMA = .9
-TARGET_UPDATE = 100
+TARGET_UPDATE = 25
 LEARNING_RATE = 1e-4
-START_TRAINING = 130
-LEARN_FREQUENCY = 1
-ACTION_DICT = {
-    0: 'forward',  
-    1: 'back',  
-    2: 'left', 
-    3: 'right',
-    4: 'nothing'
-}
+START_TRAINING = 100
+
 NUM_ACTIONS = 5
 my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 1
+LEVEL = 2
 # be sure to change this to YOUR PATH
 path = 'C:/Users/AnthonyN/Desktop/TheUltimateDropper/DropperMap'
 
+level_coords = [(-611.5, 252, -745.5),
+                (-634.5, 252, -690.5),
+                (-581.5, 252, -698.5),
+                (-555.5, 252, -750.5),
+                (-524.5, 252, -755.5),
+                (-456.5, 252, -749.5),
+                (-442.5, 252, -672.5),
+                (-527.5, 252, -661.5),
+                (-487.5, 252, -625.5),
+                (-445.5, 252, -622.5),
+                (-416.5, 252, -628.5),
+                (-363.5, 248, -644.5),
+                (-361.5, 240, -708.5)]
 
 def GetMissionXML():
 
     # change the starting position based on the level chosen
-    if LEVEL == 1: pos = 'x="-611.5" y="252" z="-745.5"'
-    elif LEVEL == 2: pos = 'x="-634.5" y="252" z="-690.5"'
-    elif LEVEL == 3: pos = 'x="-581.5" y="252" z="-698.5"'
-    elif LEVEL == 4: pos = 'x="-555.5" y="252" z="-750.5"'
-    elif LEVEL == 5: pos = 'x="-524.5" y="252" z="-755.5"'
-    elif LEVEL == 6: pos = 'x="-456.5" y="252" z="-749.5"'
-    elif LEVEL == 7: pos = 'x="-442.5" y="252" z="-672.5"'
-    elif LEVEL == 8: pos = 'x="-527.5" y="252" z="-661.5"'
-    elif LEVEL == 9: pos = 'x="-487.5" y="252" z="-625.5"'
-    elif LEVEL == 10: pos = 'x="-445.5" y="252" z="-622.5"'
-    elif LEVEL == 11: pos = 'x="-416.5" y="252" z="-628.5"'
-    elif LEVEL == 12: pos = 'x="-363.5" y="248" z="-644.5"'
-    elif LEVEL == 13: pos = 'x="-361.5" y="240" z="-708.5"'
+    pos = f'x="{level_coords[LEVEL][0]}" y="{level_coords[LEVEL][1]}" z="{level_coords[LEVEL][2]}"'
 
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-                <About>
-                    <Summary>TheUltimateDropper</Summary>
-                </About>
+                <About><Summary>TheUltimateDropper</Summary></About>
 
                 <ServerSection>
                     <ServerInitialConditions>
@@ -95,6 +87,7 @@ def GetMissionXML():
                     <AgentStart>
                         <Placement ''' + pos + ''' pitch="90" yaw="180"/>
                     </AgentStart>
+                    
                     <AgentHandlers>
                         <ContinuousMovementCommands/>
                         <ObservationFromFullStats/>
@@ -140,7 +133,7 @@ def get_action(obs, model, epsilon, allow_break_action):
     return action
     
 def get_observation(world_state):
-    """Use the agent observation API to get a 20 x 10 x 10 grid around the agent"""
+    """Use the agent observation API to get a DEPTH x OBS_SIZE/2 x OBS_SIZE/2 cube around the agent"""
     
     obs, pos = np.zeros((DEPTH, OBS_SIZE, OBS_SIZE)), None
     
@@ -165,11 +158,6 @@ def get_observation(world_state):
                 else: grid_binary.append(1)
                     
             obs = np.reshape(grid_binary, (DEPTH, OBS_SIZE, OBS_SIZE))
-            # Rotate observation with orientation of agent
-            yaw = observations['Yaw']
-            if yaw == 270: obs = np.rot90(obs, k=1, axes=(1, 2))
-            elif yaw == 0: obs = np.rot90(obs, k=2, axes=(1, 2))
-            elif yaw == 90: obs = np.rot90(obs, k=3, axes=(1, 2))
             break
 
     return obs, pos
@@ -177,7 +165,6 @@ def get_observation(world_state):
 
 def prepare_batch(replay_buffer):
     """Randomly sample batch from replay buffer and prepare tensors"""
-
     batch_data = random.sample(replay_buffer, BATCH_SIZE)
     obs = tf.convert_to_tensor([x[0] for x in batch_data], dtype = tf.float32)
     action = tf.convert_to_tensor([x[1] for x in batch_data], dtype = tf.int32)
@@ -189,7 +176,7 @@ def prepare_batch(replay_buffer):
 
 def learn(batch, model, model_target, optim, loss_func):
     """Update CNN according to DQN Loss function"""
-
+    print('Learning...')
     obs, action, next_obs, reward, done = batch
     future_rewards = model_target.predict(next_obs)
     updated_q_values = reward + GAMMA * tf.reduce_max(future_rewards, axis = 1) * (1 - done)
@@ -201,6 +188,7 @@ def learn(batch, model, model_target, optim, loss_func):
 
     grads = tape.gradient(loss, model.trainable_variables)
     optim.apply_gradients(zip(grads, model.trainable_variables))
+    print('Done learning.')
     return loss
     
 
@@ -269,43 +257,46 @@ def train(agent_host):
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
                 print("Error:", error.text)
-            next_obs, pos = get_observation(world_state) 
+            try:
+                next_obs, pos = get_observation(world_state) 
+            except KeyError:
+                print('Ran into KeyError, continuing...')
+                continue
 
             # Get reward
             reward = 0
             if pos is not None:
                 # make distance to ground an exponential function
                 # so that it gets rewarded more for getting closer
-                reward += np.exp((252 - pos[1])/45)
+                reward += 2 * np.exp((252 - pos[1])/45)
+                #reward = 2 * (252 - pos[1])
                 dist[-1] = 252 - pos[1]
-                
-                # reward it for having air blocks in the path directly below
+                print(reward)
+                # reward it for having air blocks in the path around and directly below
                 # it, give it a negative reward for other blocks, and a big
                 # positive reward for having water in the path
-                for i in range(2 * int(OBS_SIZE / 2)):
-                    block = next_obs[i][int(OBS_SIZE / 2)][int(OBS_SIZE / 2)]
-                    if block == AIR: reward += 10
-                    elif block == OTHER_BLOCK: reward -= 20
-                    elif block == WATER: reward += 50
-     
+                s = int(OBS_SIZE / 2)
+                reward_obs = next_obs[:,s-2 : s+3,s-2 : s+3]
+                #reward += 1 * len(reward_obs[reward_obs == AIR])
+                reward += 30 * len(reward_obs[reward_obs == WATER])
+                print('After blocks', reward)
             # Store step in replay buffer
             replay_buffer.append((obs, action_idx, next_obs, reward, done))
             obs = next_obs
-
-            # Learn
+           
             global_step += 1
-            if global_step > START_TRAINING and global_step % LEARN_FREQUENCY == 0:
-                batch = prepare_batch(replay_buffer)
-                loss = learn(batch, model, model_target, optim, loss_func)
-                episode_loss += loss
+        # Learn only after each death since it takes too much time
+        # to train in the middle of the drop
+        batch = prepare_batch(replay_buffer)
+        loss = learn(batch, model, model_target, optim, loss_func)
+        episode_loss += loss
 
-                if epsilon > MIN_EPSILON:
-                    epsilon *= EPSILON_DECAY
+        if epsilon > MIN_EPSILON:
+            epsilon *= EPSILON_DECAY
 
-                if global_step % TARGET_UPDATE == 0:
-                    model_target.set_weights(model.get_weights())
+        if global_step % TARGET_UPDATE == 0:
+            model_target.set_weights(model.get_weights())
     
-        
         num_episode += 1
         returns.append(episode_return)
         steps.append(global_step)
@@ -314,20 +305,21 @@ def train(agent_host):
         loop.set_description('Episode: {} Steps: {} Time: {:.2f} Loss: {:.2f} Last Return: {:.2f} Avg Return: {:.2f}'.format(
             num_episode, global_step, (time.time() - start_time) / 60, episode_loss, episode_return, avg_return))
 
-        if num_episode > 100:
-            log_returns()
+        if num_episode % 100 == 0:
+            log_returns(num_episode)
+            model.save(f'MODEL_INFO_{num_episode}')
             exit(1)
 
         dist.append(0)
 
 
-def log_returns():
+def log_returns(num):
     plt.figure()
     plt.plot(np.arange(1, 1 + len(dist)), dist)
     plt.title('Distance Travelled')
     plt.ylabel('Distance (in Blocks)')
     plt.xlabel('Iteration')
-    plt.savefig('distance_plot.png')
+    plt.savefig(f'distance_plot_{num}.png')
 
 
 def init_malmo(agent_host):
