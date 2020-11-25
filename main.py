@@ -24,7 +24,7 @@ REWARD_DENSITY = .1
 PENALTY_DENSITY = .02
 OBS_SIZE = 31 # MUST BE AN ODD NUMBER
 DEPTH = 40
-MAX_EPISODE_STEPS = 1000
+MAX_EPISODE_STEPS = 300
 MAX_GLOBAL_STEPS = 100000
 REPLAY_BUFFER_SIZE = 10000
 EPSILON_DECAY = .999
@@ -40,7 +40,7 @@ my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 1
+LEVEL = 0
 # be sure to change this to YOUR PATH
 path = 'C:/Users/AnthonyN/Desktop/TheUltimateDropper/DropperMap'
 
@@ -149,7 +149,11 @@ def get_observation(world_state):
             observations = json.loads(msg)
             # Get observation
             pos = (observations['XPos'], observations['YPos'], observations['ZPos'])
-            grid = observations['floorAll']
+
+            try:
+                grid = observations['floorAll']
+            except KeyError:
+                continue
             
             grid_binary = []
             for x in grid:
