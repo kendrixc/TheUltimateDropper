@@ -3,6 +3,7 @@ try:
 except:
     import MalmoPython
 
+import pydot as pyd
 import os
 import sys
 import time
@@ -30,15 +31,19 @@ BATCH_SIZE = 64
 GAMMA = .9
 TARGET_UPDATE = 25
 LEARNING_RATE = 1e-4
-START_EPISODE = 1100
+START_EPISODE = 450
+
+RUN_TESTS = False
+LOAD_NUM = 0
+
 
 NUM_ACTIONS = 5
 my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 2
-ROTATE_LEVELS = False
+LEVEL = 3
+
 # be sure to change this to YOUR PATH
 path = 'C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\droppermap'
 
@@ -100,15 +105,19 @@ def GetMissionXML():
 
 
 def create_model(obs_size):
+    if RUN_TESTS:
+        print(f'Loading model number {LOAD_NUM} for testing.')
+        return keras.models.load_model(f'lvl_{LEVEL}_models/TARGET_MODEL_INFO_{LOAD_NUM}')
+
     if START_EPISODE > 0:
         print(f'Attempting to load model {START_EPISODE}')
         return keras.models.load_model(f'TARGET_MODEL_INFO_{START_EPISODE}')
+
     inputs = layers.Input(shape = obs_size)
     layer1 = layers.Conv3D(32, kernel_size = (3, 3, 3), activation = 'relu', kernel_initializer = 'he_uniform')(inputs)
     layer2 = layers.MaxPooling3D((2, 2, 2))(layer1)
     layer3 = layers.Conv3D(64, (3, 3, 3), activation = 'relu', kernel_initializer = 'he_uniform')(layer2)
     layer4 = layers.MaxPooling3D((2, 2, 2))(layer3)
-    #layer5 = layers.BatchNormalization()(layer2)
     layer6 = layers.Flatten()(layer4)
     layer7 = layers.Dense(128, activation = 'relu', kernel_initializer = 'he_uniform')(layer6)
     layer8 = layers.Dropout(0.4)(layer7)
@@ -119,7 +128,7 @@ def create_model(obs_size):
 
 
      
-def get_action(obs, model, epsilon, allow_break_action):
+def get_action(obs, model, epsilon):
     """Select action according to e-greedy policy"""
     
     if np.random.ranf() <= epsilon:
@@ -130,6 +139,7 @@ def get_action(obs, model, epsilon, allow_break_action):
         obs = tf.expand_dims(obs, 0)
         action_probs = model(obs, training = False)
         action = tf.argmax(action_probs[0].numpy())
+        action = random.choices(np.arange(NUM_ACTIONS), weights = action_probs[0].numpy(), k = 1)[0]
         print(f'A {action} | ', end = '')
     return action
 
@@ -197,8 +207,91 @@ def learn(batch, model, model_target, optim, loss_func):
     optim.apply_gradients(zip(grads, model.trainable_variables))
     print('Done learning.')
     return loss
-    
 
+def run_model_tests(agent_host):
+    global LOAD_NUM
+    test_data = []
+    
+    for num in np.arange(LOAD_NUM, 2001, 100):
+        LOAD_NUM = num
+        model = create_model((DEPTH, OBS_SIZE, OBS_SIZE, 1))
+        tf.keras.utils.plot_model(model, to_file='model_vis.png', show_shapes = False, show_layer_names = True, rankdir = 'TB', expand_nested = False, dpi = 96)
+        done = False
+        test_data.append(None)
+
+        agent_host = init_malmo(agent_host)
+        world_state = agent_host.getWorldState()
+        while not world_state.has_mission_begun:
+            time.sleep(0.1)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print("\nError:",error.text)
+        obs, pos = get_observation(world_state)
+
+        # Run episode
+        while world_state.is_mission_running and not done:
+            # Get action
+            action_idx = get_action(obs, model, 0)
+            
+            # forward
+            if action_idx == 0:
+                agent_host.sendCommand('move 1')
+                agent_host.sendCommand('strafe 0')
+            # back
+            elif action_idx == 1:
+                agent_host.sendCommand('move -1')
+                agent_host.sendCommand('strafe 0')
+            # left
+            elif action_idx == 2:
+                agent_host.sendCommand('strafe -1')
+                agent_host.sendCommand('move 0')
+            #right
+            elif action_idx == 3:
+                agent_host.sendCommand('strafe 1')
+                agent_host.sendCommand('move 0')
+            # don't move
+            elif action_idx == 4:
+                agent_host.sendCommand('strafe 0')
+                agent_host.sendCommand('move 0')
+            
+            # Get next observation
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print("Error:", error.text)
+            try:
+                next_obs, pos = get_observation(world_state) 
+            except KeyError:
+                print('Ran into KeyError, continuing...')
+                continue
+
+            in_water = False
+            mid = int(OBS_SIZE / 2)
+            near_blocks = next_obs[:1, mid-2:mid+3, mid-2:mid+3]
+            if len(near_blocks[near_blocks == WATER]) > 0:
+                in_water = True
+                done = True
+                print('***IN WATER***', reward)
+            if pos is not None:
+                test_data[-1] = (252 - pos[1], in_water)
+            obs = next_obs
+            time.sleep(0.05)
+
+   
+    plt.figure()
+    plt.title(f'Accuracy of Agent on Level {LEVEL}')
+    plt.xlabel('Training Episode')
+    plt.ylabel('Height from Starting Position in Blocks')
+    lbls = np.arange(100, 2001, 100)
+    plt.xticks(np.arange(1, len(lbls)+1), labels = lbls, rotation = 70)
+    for i in range(len(test_data)):
+        c = 'blue' if test_data[i][1] else 'red'
+        plt.bar(i+1, test_data[i][0], color = c)
+    plt.savefig(f'lvl_{LEVEL}_test.png')
+    exit()
+
+        
+
+        
 def train(agent_host):
     """Main loop for the DQN learning algorithm"""
     global LEVEL
@@ -247,8 +340,7 @@ def train(agent_host):
         # Run episode
         while world_state.is_mission_running and not done:
             # Get action
-            allow_break_action = obs[1, int(OBS_SIZE/2)-1, int(OBS_SIZE/2)] == 1
-            action_idx = get_action(obs, model, epsilon, allow_break_action)
+            action_idx = get_action(obs, model, epsilon)
             
             # forward
             if action_idx == 0:
@@ -330,8 +422,9 @@ def train(agent_host):
                 # don't target water not at the bottom
                 if pos[1] > 120: r_water = 0
                 # dont discourage because blocks are around the water
-                if pos[1] < 25: r_blocks = 0
-                reward = 4 * r_dist + 2000 * r_water - 5 * r_blocks
+                #if pos[1] < 25: r_blocks = 0
+                if r_water == np.inf: r_water = 0
+                reward = 0 * r_dist + 100 * r_water - 0 * r_blocks
                     
             print(f'Dist from Start: {dist[-1]} | Reward: {reward} | Epsilon: {epsilon}')
             episode_return += reward
@@ -343,20 +436,13 @@ def train(agent_host):
             if episode_step > 20:
                 done = True
                 break
-            time.sleep(0.2)
+            time.sleep(0.33)
         # Learn only after each death since it takes too much time
         # to train in the middle of the drop
+
         batch = prepare_batch(replay_buffer)
         loss = learn(batch, model, model_target, optim, loss_func)
         episode_loss += loss
-
-        # Rotate through first few levels
-        if ROTATE_LEVELS:
-            LEVEL += 1
-            if LEVEL > 3:
-                LEVEL = 0
-
-        print(f'Level is now {LEVEL}')
 
         if epsilon > MIN_EPSILON:
             epsilon *= EPSILON_DECAY
@@ -376,8 +462,8 @@ def train(agent_host):
         if num_episode % 50 == 0:
             log_returns(num_episode)
             model_target.save(f'TARGET_MODEL_INFO_{num_episode}')
-
-
+                        
+                
 def log_returns(num):
     plt.figure()
     start_ep = START_EPISODE
@@ -431,4 +517,8 @@ if __name__ == '__main__':
         print(agent_host.getUsage())
         exit(0)
 
-    train(agent_host)
+    if RUN_TESTS:
+        run_model_tests(agent_host)
+    else:
+        train(agent_host)
+    
