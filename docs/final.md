@@ -25,8 +25,10 @@ The model chosen is a convolutional neural network that takes in the observation
 ![CNN Diagram](model_vis.png)
 
 ### Reward Function
-To reward the agent during training we took into account four factors: the vertical distance traveled from the starting position *r_dist*, the distance between the agent and the nearest block of water *r_water*, the number of solid blocks surrounding the player in a 10x6x6 cube *r_blocks*, and if the player was in the water or not *r_inwater*.  We then took a linear combination of these factors as our reward function:
-$$ R(s) = 4r_dist + 2000r_water -5r_blocks + 100000r_inwater $$
+To reward the agent during training we took into account four factors: the vertical distance traveled from the starting position *rDist*, the distance between the agent and the nearest block of water *rWater*, the number of solid blocks surrounding the player in a 10x6x6 cube *rBlocks*, and if the player was in the water or not *rInWater*.  We then took a linear combination of these factors as our reward function:
+
+$$ R(s) = 4*rDist + 2000*rWater -5*rBlocks + 100000*rInWater $$
+
 While the weights of $$R(s)$$ could use more tweaking (especially as the water moves between levels), it was still able to generally guide our agent in the correct direction, with it heavily encouraging the agent to move toward water, discouraging the agent from having blocks nearby (hence the negative weight for $$r_blocks$$), and a huge reward for making it into the water.
 
 ## Evaluation
@@ -36,14 +38,17 @@ Due to the difficulties in making a general Dropper A.I described above, we tran
 ![](lvl_0_test.png)
 
 Level 0 is the simplest level by far, with an agent winning by moving slightly to the left (which can be seen in the video).  From the graph we can see that by episode 600 the agent had learned to land in the water, with it becoming more common as training continued.  The graph is fairly noisy because of the structure of the level, where an agent can get all the way to the bottom but not land in water by simply not moving, which explains the initial bump at 100. 
+
 ### Level 1
 ![](lvl_1_test.png)
 
 Level 1 was difficult to train because the water is not directly on the ground as with the other levels, but instead on the side of the map (as seen in the video).  Due to the difficulty of having to first move away from the wall to avoid obstacles, and then move toward it to hit the water, the A.I. was unable to land in the water, but was still able to make it to the bottom of the map.  We believe that given more time to explore the agent could learn to target the water, but there was not enough time to do this.
+
 ### Level 2
 ![](lvl_2_test.png)
 
 Level 2 for a human looks simple, as it is basically a big funnel, but is actually harder than it initially seems.  From the graph we see the A.I. would get near the bottom, but never quite make it to the water.  This is because the A.I. learned very early on to move away from the wall it starts in front of, but problems arise when it then continues this and ends up hitting the opposite wall before making it into the water.  We believe this could be fixed by punishing the A.I. for purposely getting closer to a wall, but again due to time constraints we did not have enough time to train an A.I. with this implemented.
+
 ### Level 3
 ![](lvl_3_test.png)
 
