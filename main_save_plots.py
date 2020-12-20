@@ -31,18 +31,18 @@ BATCH_SIZE = 64
 GAMMA = .9
 TARGET_UPDATE = 25
 LEARNING_RATE = 1e-4
-START_EPISODE = 500
+START_EPISODE = 0
 
 RUN_TESTS = True
 LOAD_NUM = 100
-MAX_NUM = 1200 # change this to the max model save
+MAX_NUM = 2000 # change this to the max model save
 
 NUM_ACTIONS = 5
 my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 0
+LEVEL = 2
 
 # be sure to change this to YOUR PATH
 path = 'C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\droppermap'
@@ -139,7 +139,7 @@ def get_action(obs, model, epsilon):
         obs = tf.expand_dims(obs, 0)
         action_probs = model(obs, training = False)
         action = tf.argmax(action_probs[0].numpy())
-        action = random.choices(np.arange(NUM_ACTIONS), weights = action_probs[0].numpy(), k = 1)[0]
+        #action = random.choices(np.arange(NUM_ACTIONS), weights = action_probs[0].numpy(), k = 1)[0]
         print(f'A {action} | ', end = '')
     return action
 
@@ -215,7 +215,7 @@ def run_model_tests(agent_host):
     for num in np.arange(LOAD_NUM, MAX_NUM + 1, 100):
         LOAD_NUM = num
         model = create_model((DEPTH, OBS_SIZE, OBS_SIZE, 1))
-        tf.keras.utils.plot_model(model, to_file='model_vis.png', show_shapes = False, show_layer_names = True, rankdir = 'TB', expand_nested = False, dpi = 96)
+        #tf.keras.utils.plot_model(model, to_file='model_vis.png', show_shapes = False, show_layer_names = True, rankdir = 'TB', expand_nested = False, dpi = 96)
         done = False
         test_data.append(None)
 
@@ -274,7 +274,7 @@ def run_model_tests(agent_host):
             if pos is not None:
                 test_data[-1] = (252 - pos[1], in_water)
             obs = next_obs
-            time.sleep(0.05)
+            time.sleep(0.2)
 
    
     plt.figure()

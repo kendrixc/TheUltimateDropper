@@ -22,7 +22,7 @@ from tensorflow.keras import layers
 # Hyperparameters
 SIZE = 50
 OBS_SIZE = 31 # MUST BE AN ODD NUMBER
-DEPTH = 100
+DEPTH = 200
 MAX_GLOBAL_STEPS = 10000000
 REPLAY_BUFFER_SIZE = 100000
 EPSILON_DECAY = .999
@@ -31,7 +31,7 @@ BATCH_SIZE = 64
 GAMMA = .9
 TARGET_UPDATE = 25
 LEARNING_RATE = 1e-4
-START_EPISODE = 450
+START_EPISODE = 0
 
 RUN_TESTS = False
 LOAD_NUM = 0
@@ -42,7 +42,7 @@ my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 3
+LEVEL = 2
 
 # be sure to change this to YOUR PATH
 path = 'C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\droppermap'
