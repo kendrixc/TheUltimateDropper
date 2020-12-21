@@ -22,6 +22,7 @@ Our baseline approach was a random A.I. on each level, which basically always fa
 
 ### Our Model
 The model chosen is a convolutional neural network that takes in the observation space (blocks), and outputs five probabilities (q-values) for which action to take (N, S, E, W, and no action).  The model consists of two convolutional layers each with max pooling, and three dense layers, with the last dense layer being the action q-values.  This was chosen both by looking at networks created for similar purposes (specifically the Atari Breakout A.I. in the Keras documentation), and through trial and error.  A diagram of the model layers is seen below.
+
 ![CNN Diagram](model_vis.png)
 
 The model was trained using an epsilon greedy algorithm wherein the action made start off mostly random, and slowly over time the model takes over in chosing actions.
