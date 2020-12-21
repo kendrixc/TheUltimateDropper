@@ -35,14 +35,14 @@ START_EPISODE = 0
 
 RUN_TESTS = True
 LOAD_NUM = 100
-MAX_NUM = 2000 # change this to the max model save
+MAX_NUM = 900 # change this to the max model save
 
 NUM_ACTIONS = 5
 my_mission, my_clients, my_mission_record = None, None, None
 
 dist = [0]
 AIR, OTHER_BLOCK, WATER = 0, 1, 2
-LEVEL = 2
+LEVEL = 1
 
 # be sure to change this to YOUR PATH
 path = 'C:\Malmo-0.37.0-Windows-64bit_withBoost_Python3.7\Python_Examples\Project\TheUltimateDropper\droppermap'

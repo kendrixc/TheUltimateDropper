@@ -4,7 +4,7 @@ title: Final Report
 ---
 
 ## Video
-<iframe width="560" height="315" src="URL HERE" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe> 
+<iframe width="560" height="315" src="https://youtu.be/1Qfzdgl1_y8" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe> 
 
 ## Project Summary
 The goal of this project is to create an AI that can play the map The Dropper by Bigre. In the map, the player must complete 16 different levels (of which we focus on the first four); in each level the agent starts off at the top of a large drop and must control themselves as they fall—with the goal of landing safely in water located at the bottom of each level.  Each level increases in difficulty by adding more blocks and structures the agent must avoid hitting along with changing the position, direction, and shape of the water.  One of the key features we set for this project was to create an A.I. that plays as if it were human, that is, no instantaneous movement, it is unable to see the entire map, and it can only perform an action 4 to 5 times per second (simulating human reaction time).  The model for the A.I. uses a convolutional neural network that receives information about the blocks surrounding the agent and outputs q-values for the action to take (N, S, E, W, or no action). The reward the AI receives is proportional to the distance travelled from the start of the drop but gets a huge positive reward for safely landing into water or a huge penalty for hitting an obstacle.  
@@ -23,13 +23,14 @@ Our baseline approach was a random A.I. on each level, which basically always fa
 ### Our Model
 The model chosen is a convolutional neural network that takes in the observation space (blocks), and outputs five probabilities (q-values) for which action to take (N, S, E, W, and no action).  The model consists of two convolutional layers each with max pooling, and three dense layers, with the last dense layer being the action q-values.  This was chosen both by looking at networks created for similar purposes (specifically the Atari Breakout A.I. in the Keras documentation), and through trial and error.  A diagram of the model layers is seen below.
 ![CNN Diagram](model_vis.png)
+The model was trained using an epsilon greedy algorithm wherein the action made start off mostly random, and slowly over time the model takes over in chosing actions.
 
 ### Reward Function
 To reward the agent during training we took into account four factors: the vertical distance traveled from the starting position *rDist*, the distance between the agent and the nearest block of water *rWater*, the number of solid blocks surrounding the player in a 10x6x6 cube *rBlocks*, and if the player was in the water or not *rInWater*.  We then took a linear combination of these factors as our reward function:
 
 $$ R(s) = 4*rDist + 2000*rWater -5*rBlocks + 100000*rInWater $$
 
-While the weights of $$R(s)$$ could use more tweaking (especially as the water moves between levels), it was still able to generally guide our agent in the correct direction, with it heavily encouraging the agent to move toward water, discouraging the agent from having blocks nearby (hence the negative weight for $$r_blocks$$), and a huge reward for making it into the water.
+While the weights of $$R(s)$$ could use more tweaking (especially as the water moves between levels), it was still able to generally guide our agent in the correct direction, with it heavily encouraging the agent to move toward water, discouraging the agent from having blocks nearby (hence the negative weight for *rBlocks*), and a huge reward for making it into the water.
 
 ## Evaluation
 Due to the difficulties in making a general Dropper A.I described above, we transitioned to training a new A.I. individually for levels 0 through 3.  Below are discussion and details for each level.  For each level, we have a graph showing how far the agent gets at each 100th episode of training, without any randomness (meaning the agent will always take the same path at that episode), with the bar being blue if it landed in the water and red otherwise. 
@@ -40,9 +41,8 @@ Due to the difficulties in making a general Dropper A.I described above, we tran
 Level 0 is the simplest level by far, with an agent winning by moving slightly to the left (which can be seen in the video).  From the graph we can see that by episode 600 the agent had learned to land in the water, with it becoming more common as training continued.  The graph is fairly noisy because of the structure of the level, where an agent can get all the way to the bottom but not land in water by simply not moving, which explains the initial bump at 100. 
 
 ### Level 1
-![](lvl_1_test.png)
 
-Level 1 was difficult to train because the water is not directly on the ground as with the other levels, but instead on the side of the map (as seen in the video).  Due to the difficulty of having to first move away from the wall to avoid obstacles, and then move toward it to hit the water, the A.I. was unable to land in the water, but was still able to make it to the bottom of the map.  We believe that given more time to explore the agent could learn to target the water, but there was not enough time to do this.
+Level 1 was difficult to train because the water is not directly on the ground as with the other levels, but instead on the side of the map (as seen in the video).  Due to this we were not able to train an A.I. that got anywhere near the water so we decided to leave it out and focus on the following two levels.
 
 ### Level 2
 ![](lvl_2_test.png)
@@ -59,6 +59,8 @@ From these four examples we see that our model is able to learn the specifics of
 
 ## References
 Chapman, Jacob, and Mathias Lechner. “Keras Documentation: Deep Q-Learning for Atari Breakout.” *Keras*, 23 May 2020, keras.io/examples/rl/deep_q_network_breakout/.
+
 Microsoft. “Project Malmo Documentation.” *Project Malmo*, microsoft.github.io/malmo/0.17.0/Documentation/index.html.
+
 Sharma, Adiyta. “Convolutional Neural Networks in Python.” *DataCamp Community*, 5 Dec. 2017, www.datacamp.com/community/tutorials/convolutional-neural-networks-python.
 
